@@ -1,4 +1,4 @@
-# Resilience-H8
+# Resilience_H8
 
 A robust Python library for implementing resilience patterns in microservices architectures with concurrency control.
 
@@ -16,7 +16,13 @@ A robust Python library for implementing resilience patterns in microservices ar
 ## Installation
 
 ```bash
-pip install resilience-h8
+# From PyPI (recommended for production)
+pip install resilience_h8
+
+# From source (for development)
+git clone https://github.com/yourusername/resilience_h8.git
+cd resilience_h8
+pip install -e .
 ```
 
 ## Quick Start
@@ -26,8 +32,7 @@ import asyncio
 import structlog
 from httpx import AsyncClient, RequestError, TimeoutException
 
-from resilience import ResilienceService
-from concurrency.task_manager import StandardTaskManager
+from resilience_h8 import ResilienceService, StandardTaskManager
 
 # Setup logging and task manager
 logger = structlog.get_logger()
@@ -86,7 +91,7 @@ if __name__ == "__main__":
 Limits the number of concurrent operations to prevent resource exhaustion.
 
 ```python
-from resilience import StandardBulkhead
+from resilience_h8 import StandardBulkhead
 
 # Create a bulkhead
 bulkhead = StandardBulkhead(
@@ -111,7 +116,7 @@ result = await bulkhead.execute(my_function, timeout=5.0)
 Prevents cascading failures by failing fast when a dependent service is unavailable.
 
 ```python
-from resilience import StandardCircuitBreaker
+from resilience_h8 import CircuitBreaker, StandardCircuitBreaker
 
 # Create a circuit breaker
 circuit_breaker = StandardCircuitBreaker(
@@ -136,7 +141,7 @@ result = await circuit_breaker.execute(my_function, fallback=fallback_function)
 Automatically retries failed operations with configurable backoff and jitter.
 
 ```python
-from resilience import StandardRetryHandler
+from resilience_h8 import RetryHandler, StandardRetryHandler
 
 # Create a retry handler
 retry_handler = StandardRetryHandler(logger=logger)
@@ -159,6 +164,40 @@ result = await retry_handler.execute(
     backoff_factor=1.0,
     jitter=True
 )
+```
+
+## Development
+
+### Setting up the Development Environment
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/resilience_h8.git
+cd resilience_h8
+
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Run type checking
+mypy --config-file=mypy.ini
+```
+
+### Project Structure
+
+```
+resilience_h8/
+├── src/
+│   └── resilience_h8/
+│       ├── concurrency/      # Concurrency management tools
+│       ├── custom_types/     # Custom type definitions
+│       ├── interfaces/       # Interface definitions
+│       └── resilience/       # Resilience pattern implementations
+├── tests/                    # Test suite
+├── pyproject.toml           # Package configuration
+└── README.md                # This file
 ```
 
 ## License
