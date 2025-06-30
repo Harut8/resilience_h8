@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "resilience_h8"
+version = "0.1.0"
+description = "Resilience library for microservices with concurrency control"
+authors = [
+    {name = "Harutyun Avetisyan", email = "har.avetisyan2002@gmail.com"},
+]
+requires-python = ">=3.11"
+license = {text = "MIT"}
+dependencies = [
+    "structlog>=23.1.0",
+    "typing_extensions>=4.5.0",
+    "httpx>=0.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=23.3.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.3.0",
+    "pytest>=7.3.1",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["resilience_h8"]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.11"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
