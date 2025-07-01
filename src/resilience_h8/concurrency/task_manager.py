@@ -13,7 +13,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Coroutine, Dict, Gen
 import structlog
 from structlog.stdlib import get_logger
 
-from src.resilience_h8.interfaces.concurrency import TaskManager
+from ..interfaces.concurrency import TaskManager
 
 T = TypeVar("T")
 R = TypeVar("R")

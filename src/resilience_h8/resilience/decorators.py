@@ -10,12 +10,11 @@ import asyncio
 
 import structlog
 from structlog import get_logger
-
-from src.resilience_h8.interfaces.concurrency import TaskManager
-from src.resilience_h8.interfaces.resilience import ResilienceDecorator
-from src.resilience_h8.resilience.bulkhead import StandardBulkhead
-from src.resilience_h8.resilience.circuit_breaker import StandardCircuitBreaker
-from src.resilience_h8.resilience.retry import StandardRetryHandler
+from ..interfaces.concurrency import TaskManager
+from ..interfaces.resilience import ResilienceDecorator
+from ..resilience.bulkhead import StandardBulkhead
+from ..resilience.circuit_breaker import StandardCircuitBreaker
+from ..resilience.retry import StandardRetryHandler
 
 P = TypeVar("P", bound=Callable[..., Any])
 

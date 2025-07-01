@@ -13,9 +13,9 @@ from typing import Any, Callable, Dict, Generic, List, Optional, Protocol, Type,
 import structlog
 from structlog import get_logger
 
-from src.resilience_h8.custom_types.resilience import RetryableContext
-from src.resilience_h8.interfaces.concurrency import TaskManager
-from src.resilience_h8.interfaces.resilience import RetryHandler
+from ..custom_types.resilience import RetryableContext
+from ..interfaces.concurrency import TaskManager
+from ..interfaces.resilience import RetryHandler
 
 T = TypeVar("T")
 R = TypeVar("R")

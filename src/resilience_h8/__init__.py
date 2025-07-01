@@ -8,12 +8,10 @@ A library implementing resilience patterns for asynchronous operations, includin
 """
 
 
-
-
 __all__ = ["ResilienceService", "StandardTaskManager", "StandardBulkhead", "CircuitBreaker", "RetryableContext"]
 
-from src.resilience_h8.concurrency.task_manager import StandardTaskManager
-from src.resilience_h8.custom_types.resilience import RetryableContext
-from src.resilience_h8.interfaces.resilience import Bulkhead, CircuitBreaker, RetryHandler
-from src.resilience_h8.resilience.bulkhead import StandardBulkhead
-from src.resilience_h8.resilience.decorators import ResilienceService
+from .concurrency.task_manager import StandardTaskManager
+from .custom_types.resilience import RetryableContext
+from .interfaces.resilience import Bulkhead, CircuitBreaker, RetryHandler
+from .resilience.bulkhead import StandardBulkhead
+from .resilience.decorators import ResilienceService

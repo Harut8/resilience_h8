@@ -10,6 +10,5 @@ __all__ = [
     "AsyncTaskManager",
 ]
 
-from src.resilience_h8.concurrency.async_task_manager import AsyncTaskManager
-
-from src.resilience_h8.concurrency.task_manager import StandardTaskManager
+from .async_task_manager import AsyncTaskManager
+from .task_manager import StandardTaskManager

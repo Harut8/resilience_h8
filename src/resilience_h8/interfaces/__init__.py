@@ -16,5 +16,5 @@ __all__ = [
     "ResilienceDecorator",
 ]
 
-from src.resilience_h8.interfaces.concurrency import WorkerPool, TaskManager
-from src.resilience_h8.interfaces.resilience import ResilienceDecorator
+from .concurrency import WorkerPool, TaskManager
+from .resilience import ResilienceDecorator

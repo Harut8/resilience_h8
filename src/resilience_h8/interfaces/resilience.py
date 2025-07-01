@@ -8,7 +8,7 @@ approaches to handling failures in distributed systems.
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
 
-from src.resilience_h8.custom_types.resilience import CircuitState
+from ..custom_types.resilience import CircuitState
 
 T = TypeVar("T")
 R = TypeVar("R")

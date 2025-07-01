@@ -13,8 +13,7 @@ __all__ = [
     "ResilienceService",
 ]
 
-from src.resilience_h8.resilience.circuit_breaker import StandardCircuitBreaker
-
-from src.resilience_h8.resilience.bulkhead import StandardBulkhead
-from src.resilience_h8.resilience.decorators import ResilienceService
-from src.resilience_h8.resilience.retry import StandardRetryHandler
+from .circuit_breaker import StandardCircuitBreaker
+from .bulkhead import StandardBulkhead
+from .decorators import ResilienceService
+from .retry import StandardRetryHandler

@@ -11,8 +11,8 @@ from typing import Any, Callable, Dict, Generic, Optional, TypeVar, cast
 import structlog
 from structlog import get_logger
 
-from src.resilience_h8 import Bulkhead
-from src.resilience_h8.interfaces.concurrency import TaskManager
+from ..interfaces.concurrency import TaskManager
+from ..interfaces.resilience import Bulkhead
 
 T = TypeVar("T")
 P = TypeVar("P", bound=Callable[..., Any])

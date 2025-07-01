@@ -12,9 +12,8 @@ from typing import Any, Callable, Dict, Generic, Optional, TypeVar, cast
 
 import structlog
 from structlog import get_logger
-
-from src.resilience_h8 import CircuitBreaker
-from src.resilience_h8.custom_types.resilience import CircuitState
+from ..interfaces.resilience import CircuitBreaker
+from ..custom_types.resilience import CircuitState
 
 T = TypeVar("T")
 R = TypeVar("R")
