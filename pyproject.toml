@@ -26,6 +26,7 @@ dependencies = [
     "structlog>=23.1.0",
     "typing_extensions>=4.5.0",
     "httpx>=0.24.0",
+    "psutil>=7.0.0",
 ]
 
 [project.optional-dependencies]
@@ -40,8 +41,8 @@ dev = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/Harut8/resilience-h8"
-"Bug Tracker" = "https://github.com/Harut8/resilience-h8/issues"
+"Homepage" = "https://github.com/Harut8/resilience_h8"
+"Bug Tracker" = "https://github.com/Harut8/resilience_h8/issues"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

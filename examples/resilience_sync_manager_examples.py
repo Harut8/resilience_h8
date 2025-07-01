@@ -10,8 +10,7 @@ from typing import Any, Dict
 import structlog
 from httpx import AsyncClient, RequestError, TimeoutException
 
-from src.resilience_h8 import ResilienceService, StandardTaskManager
-from src.resilience_h8.resilience.bulkhead import StandardBulkhead
+from resilience_h8 import ResilienceService, StandardTaskManager, StandardBulkhead
 
 logger = structlog.get_logger()
 
@@ -35,43 +34,46 @@ async def _get_data(endpoint: str = "/data") -> Dict[str, Any]:
 
 
 bulkhead: StandardBulkhead[Any] = StandardBulkhead(
-            name="api_data",
-            max_concurrent=10,
-            max_queue_size=20,
-            task_manager=None,
-            logger=logger,
+    name="api_data",
+    max_concurrent=10,
+    max_queue_size=20,
+    task_manager=None,
+    logger=logger,
 )
 
 task_manager: StandardTaskManager[Any, Any] = StandardTaskManager(
-        max_workers=10,
-        logger=logger
+    max_workers=10, logger=logger
 )
 
 resilience_service = ResilienceService(
-        task_manager=task_manager,
-        logger=logger,
+    task_manager=task_manager,
+    logger=logger,
 )
 
 with_retry = resilience_service.with_retry(
     max_retries=3,
     backoff_factor=1.0,
     jitter=True,
-    retry_on_exceptions=[TimeoutException("Timeout occurred"), RequestError("Request failed")],
-    )(_get_data)
+    retry_on_exceptions=[
+        TimeoutException("Timeout occurred"),
+        RequestError("Request failed"),
+        Exception("Generic error"),
+    ],
+)(_get_data)
 
 with_circuit_breaker = resilience_service.with_circuit_breaker(
     failure_threshold=5,
     recovery_timeout=30.0,
     name="api_client",
     fallback=lambda *args: logger.warning(f"Circuit breaker is open for {args[0]}"),
-    )(_get_data)
+)(_get_data)
 
 with_bulkhead = resilience_service.with_bulkhead(
     max_concurrent=10,
     max_queue_size=20,
     timeout=5.0,
     name="api_data",
-    )(_get_data)
+)(_get_data)
 
 
 with_resilience = resilience_service.with_resilience(
@@ -79,12 +81,17 @@ with_resilience = resilience_service.with_resilience(
         "max_retries": 3,
         "backoff_factor": 1.0,
         "jitter": True,
-        "retry_on_exceptions": [TimeoutException("Timeout occurred"), RequestError("Request failed")],
+        "retry_on_exceptions": [
+            TimeoutException("Timeout occurred"),
+            RequestError("Request failed"),
+        ],
     },
     circuit_config={
         "failure_threshold": 2,
         "recovery_timeout": 30.0,
-        "fallback": lambda *args: logger.warning(f"Circuit breaker is open for {args[0]}"),
+        "fallback": lambda *args: logger.warning(
+            f"Circuit breaker is open for {args[0]}"
+        ),
         "name": "api_client",
     },
     bulkhead_config={
@@ -94,14 +101,15 @@ with_resilience = resilience_service.with_resilience(
         "name": "api_data",
     },
     timeout=5.0,
-    )(_get_data)
+)(_get_data)
 
 
 async def main() -> None:
-    # await with_retry("/data")
-    # await with_circuit_breaker("/data")
-    # await with_bulkhead("/data")
+    await with_retry("/data")
+    await with_circuit_breaker("/data")
+    await with_bulkhead("/data")
     await with_resilience("/data")
+
 
 if __name__ == "__main__":
     import asyncio
