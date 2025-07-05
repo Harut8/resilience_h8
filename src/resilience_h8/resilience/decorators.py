@@ -14,6 +14,7 @@ from ..interfaces.concurrency import TaskManager
 from ..interfaces.resilience import ResilienceDecorator
 from ..resilience.bulkhead import StandardBulkhead
 from ..resilience.circuit_breaker import StandardCircuitBreaker
+from ..resilience.rate_limiter import TokenBucketRateLimiter
 from ..resilience.retry import StandardRetryHandler
 
 P = TypeVar("P", bound=Callable[..., Any])
@@ -51,6 +52,9 @@ class ResilienceService(ResilienceDecorator):
 
         # Bulkhead registry
         self._bulkheads: dict[str, StandardBulkhead[Any]] = {}
+
+        # Rate limiter registry
+        self._rate_limiters: dict[str, TokenBucketRateLimiter[Any]] = {}
 
     def with_retry(
         self,
@@ -145,7 +149,59 @@ class ResilienceService(ResilienceDecorator):
 
         return self._bulkheads[name].with_bulkhead(timeout=timeout)
 
-    def with_timeout(self, timeout: float) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def with_rate_limiter(
+        self,
+        requests_per_period: int,
+        period_seconds: float,
+        wait: bool = True,
+        timeout: Optional[float] = None,
+        name: str = "default",
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Create a rate limiter decorator.
+
+        Args:
+            requests_per_period: Maximum number of requests allowed in the period
+            period_seconds: Time period in seconds for the rate limit
+            wait: If True, wait until execution is allowed; if False, raise exception when rate limit is hit
+            timeout: Maximum time to wait for rate limit availability
+            name: Name of the rate limiter instance
+
+        Returns:
+            Decorator function for adding rate limiting
+        """
+        # Create or get the rate limiter instance
+        rate_limiter_key = f"{name}:{requests_per_period}:{period_seconds}"
+        if rate_limiter_key not in self._rate_limiters:
+            self._rate_limiters[rate_limiter_key] = TokenBucketRateLimiter(
+                requests_per_period=requests_per_period,
+                period_seconds=period_seconds,
+                name=name,
+            )
+
+        rate_limiter = self._rate_limiters[rate_limiter_key]
+
+        def decorator(func: P) -> P:
+            @wraps(func)
+            async def wrapper(*args: Any, **kwargs: Any) -> Any:
+                # Prepare the operation to be executed
+                async def operation() -> Any:
+                    result = func(*args, **kwargs)
+                    if asyncio.iscoroutine(result):
+                        return await result
+                    return result
+
+                # Execute with rate limiting
+                return await rate_limiter.execute(
+                    operation=operation, wait=wait, timeout=timeout
+                )
+
+            return cast(P, wrapper)
+
+        return decorator
+
+    def with_timeout(
+        self, timeout: float
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Create a timeout decorator.
 
         Args:
@@ -178,17 +234,19 @@ class ResilienceService(ResilienceDecorator):
         retry_config: Optional[Dict[str, Any]] = None,
         circuit_config: Optional[Dict[str, Any]] = None,
         bulkhead_config: Optional[Dict[str, Any]] = None,
+        rate_limit_config: Optional[Dict[str, Any]] = None,
         timeout: Optional[float] = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Create a composite resilience decorator.
 
         Applies multiple resilience patterns in the recommended order:
-        timeout -> bulkhead -> circuit_breaker -> retry
+        timeout -> bulkhead -> rate_limiter -> circuit_breaker -> retry
 
         Args:
             retry_config: Configuration for retry pattern
             circuit_config: Configuration for circuit breaker pattern
             bulkhead_config: Configuration for bulkhead pattern
+            rate_limit_config: Configuration for rate limiting
             timeout: Maximum time in seconds for operation
 
         Returns:
@@ -201,13 +259,24 @@ class ResilienceService(ResilienceDecorator):
 
             # Apply patterns in reverse order (inside to outside)
             if retry_config:
-                decorated_func = cast(P, self.with_retry(**retry_config)(decorated_func))
+                decorated_func = cast(
+                    P, self.with_retry(**retry_config)(decorated_func)
+                )
 
             if circuit_config:
-                decorated_func = cast(P, self.with_circuit_breaker(**circuit_config)(decorated_func))
+                decorated_func = cast(
+                    P, self.with_circuit_breaker(**circuit_config)(decorated_func)
+                )
+
+            if rate_limit_config:
+                decorated_func = cast(
+                    P, self.with_rate_limiter(**rate_limit_config)(decorated_func)
+                )
 
             if bulkhead_config:
-                decorated_func = cast(P, self.with_bulkhead(**bulkhead_config)(decorated_func))
+                decorated_func = cast(
+                    P, self.with_bulkhead(**bulkhead_config)(decorated_func)
+                )
 
             if timeout:
                 decorated_func = cast(P, self.with_timeout(timeout)(decorated_func))

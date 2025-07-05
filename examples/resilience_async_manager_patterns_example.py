@@ -168,6 +168,14 @@ class ResilientClient:
         )
         return await decorated_call(request_id)
 
+    async def api_with_rate_limit(self, request_id: str) -> Dict[str, Any]:
+        """Call API with rate limit pattern"""
+        return await self.resilience.with_rate_limiter(
+            requests_per_period=1,
+            period_seconds=2,
+            timeout=3.0,
+        )(self.service.call_api)(request_id)
+
 
 # Example functions to demonstrate each pattern
 async def demonstrate_basic_api_call(client: ResilientClient):
@@ -365,6 +373,29 @@ async def demonstrate_combined_patterns(client: ResilientClient):
     print(f"Final performance metrics: {client.metrics}")
 
 
+async def demonstrate_ratelimiter_pattern(client: ResilientClient):
+    print("\n=== Example 7: Rate Limiter Pattern ===")
+
+    # Make API calls with ratelimiter
+    results = []
+    for i in range(5):
+        request_id = f"ratelimiter-{i}"
+        try:
+            start_time = time.time()
+            result = await client.api_with_rate_limit(request_id)
+            elapsed = time.time() - start_time
+            print(f"Request {request_id} succeeded after {elapsed:.2f}s: {result}")
+            results.append(
+                {"status": "success", "request_id": request_id, "time": elapsed}
+            )
+        except Exception as e:
+            elapsed = time.time() - start_time
+            print(f"Request {request_id} failed after {elapsed:.2f}s: {e}")
+            results.append(
+                {"status": "failure", "request_id": request_id, "error": str(e)}
+            )
+
+
 async def main():
     print("Starting Resilience Patterns Examples...")
 
@@ -379,6 +410,7 @@ async def main():
         await demonstrate_circuit_breaker_pattern(client)
         await demonstrate_bulkhead_pattern(client)
         await demonstrate_combined_patterns(client)
+        await demonstrate_ratelimiter_pattern(client)
     finally:
         # Ensure client is closed properly
         await client.close()

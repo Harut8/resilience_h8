@@ -11,9 +11,12 @@ __all__ = [
     "StandardCircuitBreaker",
     "StandardRetryHandler",
     "ResilienceService",
+    "TokenBucketRateLimiter",
+    "FixedWindowRateLimiter",
 ]
 
 from .circuit_breaker import StandardCircuitBreaker
 from .bulkhead import StandardBulkhead
 from .decorators import ResilienceService
 from .retry import StandardRetryHandler
+from .rate_limiter import TokenBucketRateLimiter, FixedWindowRateLimiter

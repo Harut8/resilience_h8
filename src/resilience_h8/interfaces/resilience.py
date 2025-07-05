@@ -6,7 +6,7 @@ approaches to handling failures in distributed systems.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar, Union
 
 from ..custom_types.resilience import CircuitState
 
@@ -61,7 +61,10 @@ class CircuitBreaker(Generic[T, R], ABC):
 
     @abstractmethod
     async def execute(
-        self, operation: Callable[..., T], fallback: Optional[Callable[..., R]] = None, context: Optional[Dict[str, Any]] = None
+        self,
+        operation: Callable[..., T],
+        fallback: Optional[Callable[..., R]] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> R:
         """Execute an operation with circuit breaker protection.
 
@@ -84,7 +87,10 @@ class Bulkhead(Generic[T], ABC):
 
     @abstractmethod
     async def execute(
-        self, operation: Callable[..., T], timeout: Optional[float] = None, context: Optional[Dict[str, Any]] = None
+        self,
+        operation: Callable[..., T],
+        timeout: Optional[float] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> T:
         """Execute an operation with bulkhead protection.
 
@@ -98,6 +104,47 @@ class Bulkhead(Generic[T], ABC):
 
         Raises:
             Exception: If the bulkhead is full and timeout is reached
+        """
+        pass
+
+
+class RateLimiter(Generic[T], ABC):
+    """Interface for rate limiting implementations."""
+
+    @abstractmethod
+    async def execute(
+        self,
+        operation: Callable[..., T],
+        wait: bool = True,
+        timeout: Optional[float] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> T:
+        """Execute an operation with rate limiting protection.
+
+        Args:
+            operation: Function to execute with rate limiting
+            wait: If True, wait until execution is allowed; if False, raise exception when rate limit is hit
+            timeout: Maximum time to wait for rate limit availability
+            context: Optional context information
+
+        Returns:
+            Result of the operation
+
+        Raises:
+            RateLimitExceeded: If the rate limit is exceeded and wait is False
+            TimeoutError: If the timeout is reached while waiting
+        """
+        pass
+
+    @abstractmethod
+    def get_current_capacity(self) -> Dict[str, Union[int, float]]:
+        """Get current rate limit usage information.
+
+        Returns:
+            Dictionary containing rate limit information:
+                - remaining: Number of remaining requests in current window
+                - limit: Maximum number of requests allowed
+                - reset_at: Time in seconds when the current window resets
         """
         pass
 
@@ -128,7 +175,10 @@ class ResilienceDecorator(ABC):
 
     @abstractmethod
     def with_circuit_breaker(
-        self, failure_threshold: int = 5, recovery_timeout: float = 30.0, fallback: Optional[Callable[..., Any]] = None
+        self,
+        failure_threshold: int = 5,
+        recovery_timeout: float = 30.0,
+        fallback: Optional[Callable[..., Any]] = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Create a circuit breaker decorator.
 
@@ -143,7 +193,9 @@ class ResilienceDecorator(ABC):
         pass
 
     @abstractmethod
-    def with_timeout(self, timeout: float) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def with_timeout(
+        self, timeout: float
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Create a timeout decorator.
 
         Args:
@@ -151,5 +203,26 @@ class ResilienceDecorator(ABC):
 
         Returns:
             Decorator function for adding timeout
+        """
+        pass
+
+    @abstractmethod
+    def with_rate_limiter(
+        self,
+        requests_per_period: int,
+        period_seconds: float,
+        wait: bool = True,
+        timeout: Optional[float] = None,
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Create a rate limiter decorator.
+
+        Args:
+            requests_per_period: Maximum number of requests allowed in the period
+            period_seconds: Time period in seconds for the rate limit
+            wait: If True, wait until execution is allowed; if False, raise exception when rate limit is hit
+            timeout: Maximum time to wait for rate limit availability
+
+        Returns:
+            Decorator function for adding rate limiting
         """
         pass
