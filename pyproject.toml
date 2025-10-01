@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "resilience_h8"
 version = "0.1.7"
 description = "Resilience patterns library (async) with circuit breaker, bulkhead, retry, and timeout patterns"
-readme = "README.md"
+readme = {file = "README.md", content-type = "text/markdown"}
 authors = [
     {name = "Harutyun Avetisyan", email = "har.avetisyan2002@gmail.com"},
 ]
