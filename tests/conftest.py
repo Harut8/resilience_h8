@@ -2,8 +2,26 @@
 
 import asyncio
 import sys
+
 import pytest
 import structlog
+
+
+def pytest_addoption(parser):
+    """Add custom command line options."""
+    parser.addoption(
+        "--redis",
+        action="store_true",
+        default=False,
+        help="Run tests that require a Redis instance on localhost:6379",
+    )
+
+
+@pytest.fixture(scope="session")
+def redis_available(request):
+    """Check if --redis flag is provided."""
+    return request.config.getoption("--redis")
+
 
 # Configure structlog for testing
 structlog.configure(
@@ -22,7 +40,7 @@ structlog.configure(
 @pytest.fixture(scope="session")
 def event_loop():
     """Create an event loop for the test session.
-    
+
     This overrides the default fixture to use the same event loop for all tests.
     """
     if sys.platform == "win32":

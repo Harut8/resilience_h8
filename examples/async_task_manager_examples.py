@@ -19,9 +19,10 @@ proper resource management, error handling, and graceful shutdown capabilities.
 import asyncio
 import secrets
 import time
-from typing import Dict, Any
-import structlog
 from datetime import datetime
+from typing import Any
+
+import structlog
 
 # Import the AsyncTaskManager and related classes
 from resilience_h8 import AsyncTaskManager, BackpressureSettings, TaskPriority
@@ -43,9 +44,7 @@ async def example_basic_usage():
     print("\n=== Example 1: Basic Usage ===")
 
     # Create a task manager with default settings
-    task_manager = AsyncTaskManager(
-        max_concurrent_tasks=5, default_timeout=10, logger=logger
-    )
+    task_manager = AsyncTaskManager(max_concurrent_tasks=5, default_timeout=10, logger=logger)
 
     # Define a simple async task
     async def simple_task(task_id: int, duration: float):
@@ -77,7 +76,7 @@ async def example_concurrent_tasks():
     )
 
     # Define a task that takes a random amount of time
-    async def random_duration_task(task_id: int) -> Dict[str, Any]:
+    async def random_duration_task(task_id: int) -> dict[str, Any]:
         duration = secrets.randbelow(3)
         print(f"Task {task_id} started (duration: {duration:.2f}s)")
         await asyncio.sleep(duration)  # Simulate work
@@ -120,9 +119,7 @@ async def example_task_prioritization():
     print("\n=== Example 3: Task Prioritization ===")
 
     # Create a task manager with priority queue enabled
-    backpressure_settings = BackpressureSettings(
-        enable_priority_queue=True, max_queue_size=100
-    )
+    backpressure_settings = BackpressureSettings(enable_priority_queue=True, max_queue_size=100)
 
     task_manager = AsyncTaskManager(
         max_concurrent_tasks=2,  # Very limited concurrency to demonstrate prioritization
@@ -203,14 +200,14 @@ async def example_timeout_handling():
         # This should complete normally
         result1 = await task_manager.run_with_timeout(timeout_task(1, 1.0), timeout=2.0)
         print(f"Task 1 result: {result1}")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         print("Task 1 timed out (unexpected)")
 
     try:
         # This should time out
         result2 = await task_manager.run_with_timeout(timeout_task(2, 3.0), timeout=1.5)
         print(f"Task 2 result: {result2} (unexpected)")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         print("Task 2 timed out (expected)")
 
 

@@ -5,12 +5,11 @@ in a real-world application, showing the integration between
 concurrency management and resilience strategies.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 import structlog
 from httpx import AsyncClient, RequestError, TimeoutException
-
-from resilience_h8 import ResilienceService, StandardTaskManager, StandardBulkhead
+from resilience_h8 import ResilienceService, StandardBulkhead, StandardTaskManager
 
 logger = structlog.get_logger()
 
@@ -19,7 +18,7 @@ BASE_URL = "https://example.com/api"
 CLIENT = AsyncClient(base_url=BASE_URL, timeout=TIMEOUT)
 
 
-async def _get_data(endpoint: str = "/data") -> Dict[str, Any]:
+async def _get_data(endpoint: str = "/data") -> dict[str, Any]:
     try:
         response = await CLIENT.get(endpoint)
         response.raise_for_status()
@@ -41,9 +40,7 @@ bulkhead: StandardBulkhead[Any] = StandardBulkhead(
     logger=logger,
 )
 
-task_manager: StandardTaskManager[Any, Any] = StandardTaskManager(
-    max_workers=10, logger=logger
-)
+task_manager: StandardTaskManager[Any, Any] = StandardTaskManager(max_workers=10, logger=logger)
 
 resilience_service = ResilienceService(
     task_manager=task_manager,
@@ -89,9 +86,7 @@ with_resilience = resilience_service.with_resilience(
     circuit_config={
         "failure_threshold": 2,
         "recovery_timeout": 30.0,
-        "fallback": lambda *args: logger.warning(
-            f"Circuit breaker is open for {args[0]}"
-        ),
+        "fallback": lambda *args: logger.warning(f"Circuit breaker is open for {args[0]}"),
         "name": "api_client",
     },
     bulkhead_config={

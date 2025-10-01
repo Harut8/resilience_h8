@@ -1,31 +1,26 @@
 import asyncio
-import signal
-import time
-import traceback
-import psutil
-import sys
 import contextvars
 import heapq
+import signal
+import sys
+import time
+import traceback
+from collections import deque
+from collections.abc import Awaitable, Coroutine
+from contextlib import AsyncExitStack
+from datetime import datetime
 from typing import (
     Any,
-    Coroutine,
-    Dict,
     Generic,
-    List,
-    Optional,
-    Set,
+    NamedTuple,
+    ParamSpec,
+    Protocol,
     TypeVar,
     cast,
-    Protocol,
-    ParamSpec,
-    Awaitable,
     overload,
-    NamedTuple,
 )
-from contextlib import AsyncExitStack
-from collections import deque
-from datetime import datetime
 
+import psutil
 import structlog
 
 from resilience_h8.interfaces import TaskManager
@@ -39,10 +34,10 @@ P = ParamSpec("P")  # Parameter specification for preserving callable signatures
 HAS_TASK_GROUP = sys.version_info >= (3, 11)
 
 # Define context variables for tracing and context propagation
-request_id_var = contextvars.ContextVar[Optional[str]]("request_id", default=None)
-trace_id_var = contextvars.ContextVar[Optional[str]]("trace_id", default=None)
-span_id_var = contextvars.ContextVar[Optional[str]]("span_id", default=None)
-context_data_var = contextvars.ContextVar[Dict[str, Any]]("context_data", default={})
+request_id_var = contextvars.ContextVar[str | None]("request_id", default=None)
+trace_id_var = contextvars.ContextVar[str | None]("trace_id", default=None)
+span_id_var = contextvars.ContextVar[str | None]("span_id", default=None)
+context_data_var = contextvars.ContextVar[dict[str, Any] | None]("context_data", default=None)
 
 
 # Define Protocol classes for task interfaces
@@ -62,7 +57,7 @@ class TaskLike(Protocol[T]):
         ...
 
     @property
-    def name(self) -> Optional[str]:
+    def name(self) -> str | None:
         """Get the name of the task."""
         ...
 
@@ -76,12 +71,12 @@ class TaskResult(Protocol):
         ...
 
     @property
-    def result(self) -> Optional[Any]:
+    def result(self) -> Any | None:
         """The result of the task if successful."""
         ...
 
     @property
-    def error(self) -> Optional[str]:
+    def error(self) -> str | None:
         """The error message if the task failed."""
         ...
 
@@ -98,9 +93,7 @@ class PerformanceMetrics:
         self.total_tasks_completed: int = 0
         self.total_tasks_failed: int = 0
         self.total_tasks_timed_out: int = 0
-        self.execution_times: deque[int] = deque(
-            maxlen=max_history
-        )  # Store recent execution times
+        self.execution_times: deque[int] = deque(maxlen=max_history)  # Store recent execution times
         self.wait_times: deque[int] = deque(
             maxlen=max_history
         )  # Store recent wait times for semaphore
@@ -143,7 +136,7 @@ class PerformanceMetrics:
             return 0.0
         return sum(self.wait_times) / len(self.wait_times)
 
-    def get_metrics_summary(self) -> Dict[str, Any]:
+    def get_metrics_summary(self) -> dict[str, Any]:
         """Get a summary of all metrics."""
         return {
             "total_tasks_completed": self.total_tasks_completed,
@@ -166,8 +159,8 @@ class PerformanceMetrics:
 
 
 # Improved type definitions for context
-ContextDict = Dict[str, Any]
-TraceContext = Dict[str, Optional[str]]
+ContextDict = dict[str, Any]
+TraceContext = dict[str, str | None]
 
 
 # Priority levels for task execution
@@ -238,13 +231,13 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
         self,
         max_concurrent_tasks: int = 10,
         default_timeout: float = 30,
-        logger: Optional[structlog.typing.FilteringBoundLogger] = None,
+        logger: structlog.typing.FilteringBoundLogger | None = None,
         register_signal_handlers: bool = True,
         adaptive_concurrency: bool = False,
         cpu_threshold: float = 0.8,
         min_concurrent_tasks: int = 2,
         collect_metrics: bool = True,
-        backpressure_settings: Optional[BackpressureSettings] = None,
+        backpressure_settings: BackpressureSettings | None = None,
     ):
         """
         Initialize the AsyncTaskManager.
@@ -270,15 +263,13 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
         self._collect_metrics = collect_metrics
 
         # Performance metrics
-        self._metrics: Optional[PerformanceMetrics] = (
-            PerformanceMetrics() if collect_metrics else None
-        )
+        self._metrics: PerformanceMetrics | None = PerformanceMetrics() if collect_metrics else None
 
         # Concurrency control
         self._task_semaphore = asyncio.Semaphore(self._max_concurrent_tasks)
 
         # Task tracking for proper cleanup
-        self._active_tasks: Set[asyncio.Task[Any]] = set()
+        self._active_tasks: set[asyncio.Task[Any]] = set()
 
         # For resource monitoring
         self._last_resource_check: float = 0.0
@@ -286,14 +277,10 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
 
         # Backpressure mechanism
         self._backpressure_settings = backpressure_settings or BackpressureSettings()
-        self._task_queue: List[PrioritizedItem] = []  # Priority queue for pending tasks
-        self._queue_processor_task: Optional[asyncio.Task[None]] = None
-        self._queue_not_empty = (
-            asyncio.Event()
-        )  # Event to signal when queue is not empty
-        self._task_success_window: deque[bool] = deque(
-            maxlen=100
-        )  # For adaptive rate limiting
+        self._task_queue: list[PrioritizedItem] = []  # Priority queue for pending tasks
+        self._queue_processor_task: asyncio.Task[None] | None = None
+        self._queue_not_empty = asyncio.Event()  # Event to signal when queue is not empty
+        self._task_success_window: deque[bool] = deque(maxlen=100)  # For adaptive rate limiting
         self._current_rate_limit = max_concurrent_tasks  # Current rate limit
         self._queue_processor_running = False
 
@@ -383,10 +370,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
                 # Reduce concurrency when CPU usage is high
                 new_limit = max(
                     self._min_concurrent_tasks,
-                    int(
-                        self._initial_max_tasks
-                        * (1 - (cpu_usage - self._cpu_threshold))
-                    ),
+                    int(self._initial_max_tasks * (1 - (cpu_usage - self._cpu_threshold))),
                 )
             else:
                 # Gradually increase concurrency when CPU usage is low
@@ -427,7 +411,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
                 )
 
     def create_and_track_task(
-        self, coro: Coroutine[Any, Any, R], task_name: Optional[str] = None
+        self, coro: Coroutine[Any, Any, R], task_name: str | None = None
     ) -> asyncio.Task[R]:
         """
         Create and track an asyncio task for proper cleanup.
@@ -447,7 +431,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
         return task
 
     async def _run_with_context(
-        self, coro: Coroutine[Any, Any, R], context_vars: Optional[ContextDict] = None
+        self, coro: Coroutine[Any, Any, R], context_vars: ContextDict | None = None
     ) -> R:
         """
         Run a coroutine with the provided context variables.
@@ -463,24 +447,17 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
             The result of the coroutine
         """
         # Save the current context values to restore them later
-        saved_tokens: Dict[str, Any] = {}
+        saved_tokens: dict[str, Any] = {}
 
         try:
             # Set context variables if provided
             if context_vars:
                 # Set each context var and save the token to restore later
-                if (
-                    "request_id" in context_vars
-                    and context_vars["request_id"] is not None
-                ):
-                    saved_tokens["request_id"] = request_id_var.set(
-                        context_vars["request_id"]
-                    )
+                if "request_id" in context_vars and context_vars["request_id"] is not None:
+                    saved_tokens["request_id"] = request_id_var.set(context_vars["request_id"])
 
                 if "trace_id" in context_vars and context_vars["trace_id"] is not None:
-                    saved_tokens["trace_id"] = trace_id_var.set(
-                        context_vars["trace_id"]
-                    )
+                    saved_tokens["trace_id"] = trace_id_var.set(context_vars["trace_id"])
 
                 if "span_id" in context_vars and context_vars["span_id"] is not None:
                     saved_tokens["span_id"] = span_id_var.set(context_vars["span_id"])
@@ -490,13 +467,12 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
                     context_vars["context_data"], dict
                 ):
                     # Merge with existing context data
-                    existing_data = context_data_var.get()
+                    existing_data = context_data_var.get() or {}
                     new_data = {**existing_data, **context_vars["context_data"]}
                     saved_tokens["context_data"] = context_data_var.set(new_data)
 
             # Run the coroutine with the set context
-            result = await coro
-            return result
+            return await coro
 
         finally:
             # Restore previous context values
@@ -508,9 +484,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
                 elif var_name == "span_id":
                     span_id_var.reset(token)
                 elif var_name == "context_data":
-                    context_data_var.reset(
-                        cast(contextvars.Token[Dict[str, Any]], token)
-                    )
+                    context_data_var.reset(cast(contextvars.Token[dict[str, Any] | None], token))
 
     def get_current_context(self) -> ContextDict:
         """
@@ -530,8 +504,8 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
     async def run_with_semaphore(
         self,
         coro: Coroutine[Any, Any, R],
-        timeout: Optional[float] = None,
-        context_vars: Optional[ContextDict] = None,
+        timeout: float | None = None,
+        context_vars: ContextDict | None = None,
     ) -> R:
         ...
 
@@ -539,16 +513,16 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
     async def run_with_semaphore(
         self,
         coro: Awaitable[R],
-        timeout: Optional[float] = None,
-        context_vars: Optional[ContextDict] = None,
+        timeout: float | None = None,
+        context_vars: ContextDict | None = None,
     ) -> R:
         ...
 
     async def run_with_semaphore(
         self,
         coro: Awaitable[R],
-        timeout: Optional[float] = None,
-        context_vars: Optional[ContextDict] = None,
+        timeout: float | None = None,
+        context_vars: ContextDict | None = None,
     ) -> R:
         """
         Run a coroutine with semaphore control, timeout, and context propagation.
@@ -590,7 +564,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
                     if elapsed >= timeout:
                         if self._collect_metrics and self._metrics:
                             self._metrics.record_task_timeout()
-                        raise asyncio.TimeoutError("Timeout waiting for semaphore")
+                        raise TimeoutError("Timeout waiting for semaphore")
                     adjusted_timeout = timeout - elapsed
                 else:
                     adjusted_timeout = None
@@ -618,7 +592,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
                         self._metrics.record_task_completion(int(execution_time * 1000))
 
                     return result
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     if self._collect_metrics and self._metrics:
                         self._metrics.record_task_timeout()
                     raise
@@ -626,7 +600,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
                     if self._collect_metrics and self._metrics:
                         self._metrics.record_task_failure()
                     raise
-        except asyncio.TimeoutError:
+        except TimeoutError:
             if self._collect_metrics and self._metrics:
                 self._metrics.record_task_timeout()
             raise
@@ -637,10 +611,10 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
 
     async def execute_concurrent_tasks(  # noqa: C901
         self,
-        tasks: List[Coroutine[Any, Any, Dict[str, Any]]],
-        timeout: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        tasks: list[Coroutine[Any, Any, dict[str, Any]]],
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Execute multiple coroutines concurrently with resource management.
 
@@ -673,7 +647,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
             context_to_use = current_context
 
         timeout = timeout or self._default_timeout
-        results: List[Dict[str, Any]] = []
+        results: list[dict[str, Any]] = []
 
         # Use Python 3.11's TaskGroup if available for better structured concurrency
         if HAS_TASK_GROUP and len(tasks) > 0:
@@ -689,9 +663,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
                 # Create tasks with the task group
                 for i, task_coro in enumerate(tasks):
                     # Still use our semaphore for concurrency control and context propagation
-                    wrapped_coro = self.run_with_semaphore(
-                        task_coro, timeout, context_to_use
-                    )
+                    wrapped_coro = self.run_with_semaphore(task_coro, timeout, context_to_use)
                     task = tg.create_task(wrapped_coro, name=f"concurrent_task_{i}")
                     task_futures.append(task)
 
@@ -714,7 +686,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
                                     **(context or {}),
                                 )
                             # This will propagate to the task group and cancel all tasks
-                            raise asyncio.TimeoutError("Operation timeout")
+                            raise TimeoutError("Operation timeout")
 
                         _ = tg.create_task(timeout_guard(), name="timeout_guard")
 
@@ -730,10 +702,8 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
                             results.append({"success": True, "result": result})
                         else:
                             results.append({"success": False, "error": result})
-                    except (asyncio.CancelledError, asyncio.TimeoutError):
-                        results.append(
-                            {"success": False, "error": "Task cancelled or timed out"}
-                        )
+                    except (TimeoutError, asyncio.CancelledError):
+                        results.append({"success": False, "error": "Task cancelled or timed out"})
                     except Exception as e:
                         if self._logger:
                             self._logger.error(
@@ -744,7 +714,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
                             )
                         results.append({"success": False, "error": str(e)})
 
-            except (asyncio.CancelledError, asyncio.TimeoutError):
+            except (TimeoutError, asyncio.CancelledError):
                 if self._logger:
                     self._logger.error(
                         "Operation timed out or cancelled",
@@ -765,7 +735,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
             return results
 
         # Fall back to original implementation for Python 3.10 and below
-        tracked_tasks: List[asyncio.Task[Dict[str, Any]]] = []
+        tracked_tasks: list[asyncio.Task[dict[str, Any]]] = []
 
         # Create and track tasks
         for i, task_coro in enumerate(tasks):
@@ -799,7 +769,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
                             **(context or {}),
                         )
                     results.append({"success": False, "error": str(e)})
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Handle timeout for the entire operation
             if self._logger:
                 self._logger.error(
@@ -827,8 +797,8 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
     async def run_with_timeout(
         self,
         coro: Coroutine[Any, Any, T],
-        timeout: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
     ) -> T:
         """
         Run a single coroutine with timeout and proper error handling.
@@ -866,7 +836,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
 
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             if self._logger:
                 self._logger.error(
                     "Operation timed out",
@@ -901,7 +871,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
         """Get the number of active tasks"""
         return len([t for t in self._active_tasks if not t.done()])
 
-    def get_performance_metrics(self) -> Optional[Dict[str, Any]]:
+    def get_performance_metrics(self) -> dict[str, Any] | None:
         """
         Get a summary of performance metrics.
 
@@ -1033,9 +1003,9 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
 
             # Calculate success rate
             if self._task_success_window:
-                success_rate = sum(
-                    1 for result in self._task_success_window if result
-                ) / len(self._task_success_window)
+                success_rate = sum(1 for result in self._task_success_window if result) / len(
+                    self._task_success_window
+                )
             else:
                 success_rate = 1.0
 
@@ -1051,9 +1021,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
                 )
             elif success_rate < self._backpressure_settings.target_success_rate:
                 # Low success rate: reduce rate limit
-                reduction_factor = (
-                    success_rate / self._backpressure_settings.target_success_rate
-                )
+                reduction_factor = success_rate / self._backpressure_settings.target_success_rate
                 new_limit = max(
                     self._min_concurrent_tasks,
                     int(self._current_rate_limit * reduction_factor),
@@ -1087,8 +1055,8 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
         self,
         coro: Coroutine[Any, Any, R],
         priority: int = TaskPriority.NORMAL,
-        timeout: Optional[float] = None,
-        context_vars: Optional[ContextDict] = None,
+        timeout: float | None = None,
+        context_vars: ContextDict | None = None,
     ) -> asyncio.Task[R]:
         """
         Schedule a task with a specific priority.
@@ -1223,9 +1191,9 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
         """Get the current size of the task queue."""
         return len(self._task_queue)
 
-    def get_backpressure_metrics(self) -> Dict[str, Any]:
+    def get_backpressure_metrics(self) -> dict[str, Any]:
         """Get metrics about the backpressure mechanism."""
-        metrics: Dict[str, Any] = {
+        metrics: dict[str, Any] = {
             "task_queue_size": len(self._task_queue),
             "active_tasks": len(self._active_tasks),
             "current_rate_limit": self._current_rate_limit,
@@ -1233,9 +1201,9 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
 
         # Calculate success rate
         if self._task_success_window:
-            success_rate = sum(
-                1 for result in self._task_success_window if result
-            ) / len(self._task_success_window)
+            success_rate = sum(1 for result in self._task_success_window if result) / len(
+                self._task_success_window
+            )
             metrics["task_success_rate"] = float(success_rate)
 
         return metrics

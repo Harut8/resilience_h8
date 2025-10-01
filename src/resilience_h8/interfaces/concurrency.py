@@ -5,7 +5,8 @@ providing a standardized way to manage asynchronous tasks across the application
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Coroutine, Dict, Generic, List, Optional, TypeVar
+from collections.abc import Callable, Coroutine
+from typing import Any, Generic, TypeVar
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -15,7 +16,9 @@ class TaskManager(Generic[T, R], ABC):
     """Interface for task management implementations."""
 
     @abstractmethod
-    def create_and_track_task(self, coro: Coroutine[Any, Any, R], task_name: Optional[str] = None) -> Any:
+    def create_and_track_task(
+        self, coro: Coroutine[Any, Any, R], task_name: str | None = None
+    ) -> Any:
         """Create and track an asyncio task for proper cleanup.
 
         Args:
@@ -29,7 +32,10 @@ class TaskManager(Generic[T, R], ABC):
 
     @abstractmethod
     async def run_with_timeout(
-        self, coro: Coroutine[Any, Any, T], timeout: Optional[float] = None, context: Optional[Dict[str, Any]] = None
+        self,
+        coro: Coroutine[Any, Any, T],
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
     ) -> T:
         """Run a coroutine with timeout and proper error handling.
 
@@ -49,10 +55,10 @@ class TaskManager(Generic[T, R], ABC):
     @abstractmethod
     async def execute_concurrent_tasks(
         self,
-        tasks: List[Coroutine[Any, Any, Dict[str, Any]]],
-        timeout: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        tasks: list[Coroutine[Any, Any, dict[str, Any]]],
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """Execute multiple coroutines concurrently with resource management.
 
         Args:
@@ -75,7 +81,9 @@ class WorkerPool(ABC):
     """Interface for worker pool implementations."""
 
     @abstractmethod
-    async def submit(self, task: Callable[..., Coroutine[Any, Any, R]], *args: Any, **kwargs: Any) -> R:
+    async def submit(
+        self, task: Callable[..., Coroutine[Any, Any, R]], *args: Any, **kwargs: Any
+    ) -> R:
         """Submit a task to the worker pool.
 
         Args:
@@ -89,7 +97,7 @@ class WorkerPool(ABC):
         pass
 
     @abstractmethod
-    async def map(self, func: Callable[[T], Coroutine[Any, Any, R]], items: List[T]) -> List[R]:
+    async def map(self, func: Callable[[T], Coroutine[Any, Any, R]], items: list[T]) -> list[R]:
         """Apply a function to each item in a list using the worker pool.
 
         Args:

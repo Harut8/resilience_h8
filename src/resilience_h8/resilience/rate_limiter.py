@@ -6,16 +6,12 @@ to control the frequency of operations such as API calls.
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
 from typing import (
     Any,
-    Callable,
-    Dict,
     Generic,
-    Optional,
     TypeVar,
-    Union,
     overload,
-    Awaitable,
 )
 
 from ..custom_types.resilience import RateLimitExceeded
@@ -70,9 +66,7 @@ class TokenBucketRateLimiter(RateLimiter[T], Generic[T]):
         self.tokens = min(self.requests_per_period, self.tokens + new_tokens)
         self.last_refill_time = now
 
-    async def _acquire_token(
-        self, wait: bool = True, timeout: Optional[float] = None
-    ) -> bool:
+    async def _acquire_token(self, wait: bool = True, timeout: float | None = None) -> bool:
         """Attempt to acquire a token.
 
         Args:
@@ -109,7 +103,7 @@ class TokenBucketRateLimiter(RateLimiter[T], Generic[T]):
 
             # Check if we'll exceed timeout
             if timeout is not None and wait_time > timeout:
-                raise asyncio.TimeoutError(
+                raise TimeoutError(
                     f"Timeout waiting for rate limit: {self.name} would need to wait {wait_time:.2f}s but timeout is {timeout:.2f}s"
                 )
 
@@ -122,9 +116,7 @@ class TokenBucketRateLimiter(RateLimiter[T], Generic[T]):
 
             # Check timeout again after waiting
             if timeout is not None and time.monotonic() - start_time >= timeout:
-                raise asyncio.TimeoutError(
-                    f"Timeout waiting for rate limit: {self.name}"
-                )
+                raise TimeoutError(f"Timeout waiting for rate limit: {self.name}")
 
             # Now we should have a token
             if self.tokens >= 1:
@@ -132,17 +124,15 @@ class TokenBucketRateLimiter(RateLimiter[T], Generic[T]):
                 return True
 
             # Should not happen but just in case
-            raise RateLimitExceeded(
-                f"Failed to acquire token after waiting: {self.name}"
-            )
+            raise RateLimitExceeded(f"Failed to acquire token after waiting: {self.name}")
 
     @overload
     async def execute(
         self,
         operation: Callable[..., Awaitable[T]],
         wait: bool = True,
-        timeout: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
     ) -> T:
         ...
 
@@ -151,17 +141,17 @@ class TokenBucketRateLimiter(RateLimiter[T], Generic[T]):
         self,
         operation: Callable[..., T],
         wait: bool = True,
-        timeout: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
     ) -> T:
         ...
 
     async def execute(
         self,
-        operation: Callable[..., Union[Awaitable[T], T]],
+        operation: Callable[..., Awaitable[T] | T],
         wait: bool = True,
-        timeout: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
     ) -> T:
         """Execute an operation with rate limiting protection.
 
@@ -183,10 +173,9 @@ class TokenBucketRateLimiter(RateLimiter[T], Generic[T]):
         # After acquiring token, execute the operation
         if asyncio.iscoroutinefunction(operation) or asyncio.iscoroutine(operation):
             return await operation()  # type: ignore[no-any-return]
-        else:
-            return operation()  # type: ignore[return-value]
+        return operation()  # type: ignore[return-value]
 
-    def get_current_capacity(self) -> Dict[str, Union[int, float]]:
+    def get_current_capacity(self) -> dict[str, int | float]:
         """Get current rate limit usage information.
 
         Returns:
@@ -196,9 +185,7 @@ class TokenBucketRateLimiter(RateLimiter[T], Generic[T]):
         tokens = self.tokens
         now = time.monotonic()
         elapsed = now - self.last_refill_time
-        current_tokens = min(
-            self.requests_per_period, tokens + (elapsed * self.refill_rate)
-        )
+        current_tokens = min(self.requests_per_period, tokens + (elapsed * self.refill_rate))
 
         # Calculate time until full capacity
         time_to_full = (
@@ -252,9 +239,7 @@ class FixedWindowRateLimiter(RateLimiter[T], Generic[T]):
             self.window_start = now
             self.request_count = 0
 
-    async def _can_execute(
-        self, wait: bool = True, timeout: Optional[float] = None
-    ) -> bool:
+    async def _can_execute(self, wait: bool = True, timeout: float | None = None) -> bool:
         """Check if execution is allowed within rate limits.
 
         Args:
@@ -280,9 +265,7 @@ class FixedWindowRateLimiter(RateLimiter[T], Generic[T]):
 
             # If not waiting, fail immediately
             if not wait:
-                time_remaining = self.period_seconds - (
-                    time.monotonic() - self.window_start
-                )
+                time_remaining = self.period_seconds - (time.monotonic() - self.window_start)
                 raise RateLimitExceeded(
                     f"Rate limit exceeded: {self.name} ({self.requests_per_period}/{self.period_seconds}s)",
                     retry_after=time_remaining,
@@ -293,7 +276,7 @@ class FixedWindowRateLimiter(RateLimiter[T], Generic[T]):
 
             # Check if wait time exceeds timeout
             if timeout is not None and wait_time > timeout:
-                raise asyncio.TimeoutError(
+                raise TimeoutError(
                     f"Timeout waiting for rate limit: {self.name} would need to wait {wait_time:.2f}s but timeout is {timeout:.2f}s"
                 )
 
@@ -306,9 +289,7 @@ class FixedWindowRateLimiter(RateLimiter[T], Generic[T]):
 
             # Check timeout again after waiting
             if timeout is not None and time.monotonic() - start_time >= timeout:
-                raise asyncio.TimeoutError(
-                    f"Timeout waiting for rate limit: {self.name}"
-                )
+                raise TimeoutError(f"Timeout waiting for rate limit: {self.name}")
 
             # After waiting, we should be in a new window
             self.request_count += 1
@@ -319,8 +300,8 @@ class FixedWindowRateLimiter(RateLimiter[T], Generic[T]):
         self,
         operation: Callable[..., Awaitable[T]],
         wait: bool = True,
-        timeout: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
     ) -> T:
         ...
 
@@ -329,17 +310,17 @@ class FixedWindowRateLimiter(RateLimiter[T], Generic[T]):
         self,
         operation: Callable[..., T],
         wait: bool = True,
-        timeout: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
     ) -> T:
         ...
 
     async def execute(
         self,
-        operation: Callable[..., Union[Awaitable[T], T]],
+        operation: Callable[..., Awaitable[T] | T],
         wait: bool = True,
-        timeout: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
     ) -> T:
         """Execute an operation with rate limiting protection.
 
@@ -361,10 +342,9 @@ class FixedWindowRateLimiter(RateLimiter[T], Generic[T]):
         # After passing rate limit check, execute the operation
         if asyncio.iscoroutinefunction(operation) or asyncio.iscoroutine(operation):
             return await operation()  # type: ignore[no-any-return]
-        else:
-            return operation()  # type: ignore[return-value]
+        return operation()  # type: ignore[return-value]
 
-    def get_current_capacity(self) -> Dict[str, Union[int, float]]:
+    def get_current_capacity(self) -> dict[str, int | float]:
         """Get current rate limit usage information.
 
         Returns:

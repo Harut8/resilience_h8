@@ -5,8 +5,9 @@ concurrent operations to prevent resource exhaustion and cascading failures.
 """
 
 import asyncio
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Dict, Generic, Optional, TypeVar, cast
+from typing import Any, Generic, TypeVar, cast
 
 import structlog
 from structlog import get_logger
@@ -29,9 +30,9 @@ class StandardBulkhead(Bulkhead[T], Generic[T]):
         self,
         name: str,
         max_concurrent: int,
-        max_queue_size: Optional[int] = None,
-        task_manager: Optional[TaskManager[Any, Any]] = None,
-        logger: Optional[structlog.typing.FilteringBoundLogger] = None,
+        max_queue_size: int | None = None,
+        task_manager: TaskManager[Any, Any] | None = None,
+        logger: structlog.typing.FilteringBoundLogger | None = None,
     ):
         """Initialize the bulkhead.
 
@@ -51,13 +52,15 @@ class StandardBulkhead(Bulkhead[T], Generic[T]):
         # Concurrency control
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._queue_size = 0
-        self._queue_semaphore = asyncio.Semaphore(max_queue_size) if max_queue_size is not None else None
+        self._queue_semaphore = (
+            asyncio.Semaphore(max_queue_size) if max_queue_size is not None else None
+        )
 
     async def execute(  # noqa: C901
         self,
         operation: Callable[..., T],
-        timeout: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
     ) -> T:
         """Execute an operation with bulkhead protection.
 
@@ -81,7 +84,9 @@ class StandardBulkhead(Bulkhead[T], Generic[T]):
             try:
                 if timeout:
                     # Try to acquire with timeout
-                    queue_acquired = await asyncio.wait_for(self._queue_semaphore.acquire(), timeout)
+                    queue_acquired = await asyncio.wait_for(
+                        self._queue_semaphore.acquire(), timeout
+                    )
                 else:
                     # Try to acquire immediately
                     if self._queue_semaphore._value <= 0:
@@ -100,7 +105,7 @@ class StandardBulkhead(Bulkhead[T], Generic[T]):
 
                 self._queue_size += 1
 
-            except (asyncio.TimeoutError, RuntimeError) as e:
+            except (TimeoutError, RuntimeError) as e:
                 if self._logger:
                     self._logger.warning(
                         "Bulkhead rejection",
@@ -115,7 +120,7 @@ class StandardBulkhead(Bulkhead[T], Generic[T]):
             if timeout:
                 try:
                     await asyncio.wait_for(self._semaphore.acquire(), timeout)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     if self._logger:
                         self._logger.warning(
                             "Bulkhead timeout",
@@ -159,7 +164,7 @@ class StandardBulkhead(Bulkhead[T], Generic[T]):
                 self._queue_size -= 1
                 self._queue_semaphore.release()
 
-    def with_bulkhead(self, timeout: Optional[float] = None) -> Callable[[P], P]:
+    def with_bulkhead(self, timeout: float | None = None) -> Callable[[P], P]:
         """Create a decorator for adding bulkhead to a function.
 
         Args:

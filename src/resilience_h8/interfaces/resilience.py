@@ -6,7 +6,8 @@ approaches to handling failures in distributed systems.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar, Union
+from collections.abc import Callable
+from typing import Any, Generic, TypeVar
 
 from ..custom_types.resilience import CircuitState
 
@@ -25,8 +26,8 @@ class RetryHandler(Generic[T, R], ABC):
         max_retries: int = 3,
         backoff_factor: float = 1.0,
         jitter: bool = True,
-        retry_on_exceptions: Optional[List[Exception]] = None,
-        context: Optional[Dict[str, Any]] = None,
+        retry_on_exceptions: list[Exception] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> R:
         """Execute an operation with retry logic.
 
@@ -63,8 +64,8 @@ class CircuitBreaker(Generic[T, R], ABC):
     async def execute(
         self,
         operation: Callable[..., T],
-        fallback: Optional[Callable[..., R]] = None,
-        context: Optional[Dict[str, Any]] = None,
+        fallback: Callable[..., R] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> R:
         """Execute an operation with circuit breaker protection.
 
@@ -89,8 +90,8 @@ class Bulkhead(Generic[T], ABC):
     async def execute(
         self,
         operation: Callable[..., T],
-        timeout: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
     ) -> T:
         """Execute an operation with bulkhead protection.
 
@@ -116,8 +117,8 @@ class RateLimiter(Generic[T], ABC):
         self,
         operation: Callable[..., T],
         wait: bool = True,
-        timeout: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
     ) -> T:
         """Execute an operation with rate limiting protection.
 
@@ -137,7 +138,7 @@ class RateLimiter(Generic[T], ABC):
         pass
 
     @abstractmethod
-    def get_current_capacity(self) -> Dict[str, Union[int, float]]:
+    def get_current_capacity(self) -> dict[str, int | float]:
         """Get current rate limit usage information.
 
         Returns:
@@ -158,7 +159,7 @@ class ResilienceDecorator(ABC):
         max_retries: int = 3,
         backoff_factor: float = 1.0,
         jitter: bool = True,
-        retry_on_exceptions: Optional[List[Exception]] = None,
+        retry_on_exceptions: list[Exception] | None = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Create a retry decorator.
 
@@ -178,7 +179,7 @@ class ResilienceDecorator(ABC):
         self,
         failure_threshold: int = 5,
         recovery_timeout: float = 30.0,
-        fallback: Optional[Callable[..., Any]] = None,
+        fallback: Callable[..., Any] | None = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Create a circuit breaker decorator.
 
@@ -193,9 +194,7 @@ class ResilienceDecorator(ABC):
         pass
 
     @abstractmethod
-    def with_timeout(
-        self, timeout: float
-    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def with_timeout(self, timeout: float) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Create a timeout decorator.
 
         Args:
@@ -212,7 +211,7 @@ class ResilienceDecorator(ABC):
         requests_per_period: int,
         period_seconds: float,
         wait: bool = True,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Create a rate limiter decorator.
 

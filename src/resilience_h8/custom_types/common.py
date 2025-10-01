@@ -5,7 +5,7 @@ the application and aren't specific to any particular domain.
 """
 
 import uuid
-from typing import NewType, Union
+from typing import NewType
 
 
 def get_random_uuid_as_str() -> str:
@@ -18,7 +18,7 @@ def get_random_uuid_as_str() -> str:
 
 
 # Define a type for strings that are UUIDs or actual UUID objects
-UUID_STR = Union[uuid.UUID, str]
+UUID_STR = uuid.UUID | str
 
 # We can't use Union with NewType directly, so we'll use str as the base type
 # since that's what most functions will expect

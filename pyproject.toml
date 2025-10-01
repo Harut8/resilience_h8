@@ -30,14 +30,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+redis = [
+    "redis[hiredis]>=5.0.0",
+]
 dev = [
-    "black>=23.3.0",
-    "isort>=5.12.0",
-    "flake8>=6.0.0",
+    "ruff>=0.1.0",
     "mypy>=1.3.0",
     "pytest>=7.3.1",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
+    "redis[hiredis]>=5.0.0",
+]
+all = [
+    "redis[hiredis]>=5.0.0",
 ]
 
 [project.urls]
@@ -48,15 +53,63 @@ dev = [
 package-dir = {"" = "src"}
 packages = ["resilience_h8"]
 
-[tool.black]
+[tool.ruff]
 line-length = 100
-target-version = ['py311']
+target-version = "py311"
 
-[tool.isort]
-profile = "black"
-line_length = 100
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "C",   # flake8-comprehensions
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "S",   # flake8-bandit (security)
+    "T20", # flake8-print
+    "PT",  # flake8-pytest-style
+    "RET", # flake8-return
+    "SIM", # flake8-simplify
+    "ARG", # flake8-unused-arguments
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "S101",   # use of assert
+    "S311",   # pseudo-random generators
+    "T201",   # print found
+    "ARG001", # unused function argument
+    "ARG002", # unused method argument
+    "N805",   # first argument should be self
+    "S105",   # possible hardcoded password (false positives on Lua scripts)
+    "C901",   # function too complex (we'll address critical ones only)
+    "N818",   # exception naming convention (keep existing names for backward compatibility)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"examples/*.py" = ["B007", "S110"]                        # Allow unused variables and simple exception handling in examples
+"tests/*.py" = ["S101", "S110"]                           # Allow assert and simple exception handling in tests
+"src/resilience_h8/concurrency/*.py" = ["SIM105", "S110"] # Allow simple exception handling in concurrency code
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "integration: Integration tests that require external services (e.g., Redis)",
+]
 
 [tool.mypy]
 python_version = "3.11"
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
+
+[[tool.mypy.overrides]]
+module = ["redis.*", "redis.asyncio.*"]
+ignore_missing_imports = true
+disable_error_code = ["no-untyped-call", "misc", "arg-type"]

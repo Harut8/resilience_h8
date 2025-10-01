@@ -4,12 +4,14 @@ This module provides a service for applying various resilience patterns
 to functions using decorators with standardized configuration.
 """
 
-from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, TypeVar, cast
 import asyncio
+from collections.abc import Callable
+from functools import wraps
+from typing import Any, TypeVar, cast
 
 import structlog
 from structlog import get_logger
+
 from ..interfaces.concurrency import TaskManager
 from ..interfaces.resilience import ResilienceDecorator
 from ..resilience.bulkhead import StandardBulkhead
@@ -30,7 +32,7 @@ class ResilienceService(ResilienceDecorator):
     def __init__(
         self,
         task_manager: TaskManager[Any, Any],
-        logger: Optional[structlog.typing.FilteringBoundLogger] = None,
+        logger: structlog.typing.FilteringBoundLogger | None = None,
     ):
         """Initialize the resilience service.
 
@@ -61,7 +63,7 @@ class ResilienceService(ResilienceDecorator):
         max_retries: int = 3,
         backoff_factor: float = 1.0,
         jitter: bool = True,
-        retry_on_exceptions: Optional[List[Exception]] = None,
+        retry_on_exceptions: list[Exception] | None = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Create a retry decorator.
 
@@ -75,7 +77,7 @@ class ResilienceService(ResilienceDecorator):
             Decorator function for adding retry logic
         """
         # Convert Type[Exception] to actual Exception instances if needed
-        actual_exceptions: Optional[List[Exception]] = None
+        actual_exceptions: list[Exception] | None = None
         if retry_on_exceptions is not None:
             actual_exceptions = []
             for exc in retry_on_exceptions:
@@ -96,7 +98,7 @@ class ResilienceService(ResilienceDecorator):
         self,
         failure_threshold: int = 5,
         recovery_timeout: float = 30.0,
-        fallback: Optional[Callable[..., Any]] = None,
+        fallback: Callable[..., Any] | None = None,
         name: str = "default",
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Create a circuit breaker decorator.
@@ -123,8 +125,8 @@ class ResilienceService(ResilienceDecorator):
     def with_bulkhead(
         self,
         max_concurrent: int = 10,
-        max_queue_size: Optional[int] = None,
-        timeout: Optional[float] = None,
+        max_queue_size: int | None = None,
+        timeout: float | None = None,
         name: str = "default",
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Create a bulkhead decorator.
@@ -154,7 +156,7 @@ class ResilienceService(ResilienceDecorator):
         requests_per_period: int,
         period_seconds: float,
         wait: bool = True,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         name: str = "default",
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Create a rate limiter decorator.
@@ -191,17 +193,13 @@ class ResilienceService(ResilienceDecorator):
                     return result
 
                 # Execute with rate limiting
-                return await rate_limiter.execute(
-                    operation=operation, wait=wait, timeout=timeout
-                )
+                return await rate_limiter.execute(operation=operation, wait=wait, timeout=timeout)
 
             return cast(P, wrapper)
 
         return decorator
 
-    def with_timeout(
-        self, timeout: float
-    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def with_timeout(self, timeout: float) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Create a timeout decorator.
 
         Args:
@@ -231,11 +229,11 @@ class ResilienceService(ResilienceDecorator):
 
     def with_resilience(
         self,
-        retry_config: Optional[Dict[str, Any]] = None,
-        circuit_config: Optional[Dict[str, Any]] = None,
-        bulkhead_config: Optional[Dict[str, Any]] = None,
-        rate_limit_config: Optional[Dict[str, Any]] = None,
-        timeout: Optional[float] = None,
+        retry_config: dict[str, Any] | None = None,
+        circuit_config: dict[str, Any] | None = None,
+        bulkhead_config: dict[str, Any] | None = None,
+        rate_limit_config: dict[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Create a composite resilience decorator.
 
@@ -259,9 +257,7 @@ class ResilienceService(ResilienceDecorator):
 
             # Apply patterns in reverse order (inside to outside)
             if retry_config:
-                decorated_func = cast(
-                    P, self.with_retry(**retry_config)(decorated_func)
-                )
+                decorated_func = cast(P, self.with_retry(**retry_config)(decorated_func))
 
             if circuit_config:
                 decorated_func = cast(
@@ -274,9 +270,7 @@ class ResilienceService(ResilienceDecorator):
                 )
 
             if bulkhead_config:
-                decorated_func = cast(
-                    P, self.with_bulkhead(**bulkhead_config)(decorated_func)
-                )
+                decorated_func = cast(P, self.with_bulkhead(**bulkhead_config)(decorated_func))
 
             if timeout:
                 decorated_func = cast(P, self.with_timeout(timeout)(decorated_func))

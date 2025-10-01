@@ -7,21 +7,16 @@ concurrent operations, task scheduling, and timeouts.
 
 import asyncio
 import signal
+from collections.abc import Awaitable, Callable, Coroutine
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import AsyncExitStack
 from typing import (
     Any,
-    Awaitable,
-    Callable,
-    Coroutine,
-    Dict,
     Generic,
-    List,
-    Optional,
-    Set,
     TypeVar,
     cast,
 )
+
 import structlog
 from structlog.stdlib import get_logger
 
@@ -29,7 +24,7 @@ from ..interfaces.concurrency import TaskManager
 
 T = TypeVar("T")
 R = TypeVar("R")
-D = TypeVar("D", bound=Dict[str, Any])
+D = TypeVar("D", bound=dict[str, Any])
 
 
 class StandardTaskManager(TaskManager[T, R], Generic[T, R]):
@@ -54,8 +49,8 @@ class StandardTaskManager(TaskManager[T, R], Generic[T, R]):
     def __init__(
         self,
         max_workers: int = 10,
-        thread_pool: Optional[ThreadPoolExecutor] = None,
-        logger: Optional[structlog.typing.FilteringBoundLogger] = None,
+        thread_pool: ThreadPoolExecutor | None = None,
+        logger: structlog.typing.FilteringBoundLogger | None = None,
     ):
         """Initialize the standard task manager.
 
@@ -67,8 +62,8 @@ class StandardTaskManager(TaskManager[T, R], Generic[T, R]):
         self._max_workers = max_workers
         self._thread_pool = thread_pool or ThreadPoolExecutor(max_workers=max_workers)
         self._logger = logger or get_logger()
-        self._tasks: Set[asyncio.Task[Any]] = set()
-        self._results: Dict[str, Any] = {}
+        self._tasks: set[asyncio.Task[Any]] = set()
+        self._results: dict[str, Any] = {}
         self._semaphore = asyncio.Semaphore(max_workers)
         self._exit_stack = AsyncExitStack()
         self._shutting_down = False
@@ -141,8 +136,8 @@ class StandardTaskManager(TaskManager[T, R], Generic[T, R]):
     async def run_with_timeout(
         self,
         coro: Coroutine[Any, Any, T],
-        timeout: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
     ) -> T:
         """Run a coroutine with a timeout and proper error handling.
 
@@ -163,16 +158,14 @@ class StandardTaskManager(TaskManager[T, R], Generic[T, R]):
             async with self._semaphore:
                 result: T = await asyncio.wait_for(self.run_task(coro), timeout)
                 return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._logger.warning("Task timed out", timeout=timeout, **context)
             raise
         except Exception as e:
             self._logger.error("Task execution failed", exception=str(e), **context)
             raise
 
-    async def run_in_thread(
-        self, func: Callable[..., T], *args: Any, **kwargs: Any
-    ) -> T:
+    async def run_in_thread(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         """Run a function in a separate thread using the thread pool.
 
         Args:
@@ -188,15 +181,13 @@ class StandardTaskManager(TaskManager[T, R], Generic[T, R]):
         """
         try:
             loop = asyncio.get_event_loop()
-            result: T = await loop.run_in_executor(
-                self._thread_pool, lambda: func(*args, **kwargs)
-            )
+            result: T = await loop.run_in_executor(self._thread_pool, lambda: func(*args, **kwargs))
             return result
         except Exception as e:
             self._logger.error("Thread execution failed", exception=str(e))
             raise
 
-    async def gather(self, tasks: List[Awaitable[T]]) -> List[T]:
+    async def gather(self, tasks: list[Awaitable[T]]) -> list[T]:
         """Gather multiple coroutines and wait for their completion.
 
         Args:
@@ -223,10 +214,10 @@ class StandardTaskManager(TaskManager[T, R], Generic[T, R]):
 
     async def execute_concurrent_tasks(
         self,
-        tasks: List[Coroutine[Any, Any, Dict[str, Any]]],
-        timeout: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        tasks: list[Coroutine[Any, Any, dict[str, Any]]],
+        timeout: float | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """Execute multiple coroutines concurrently with proper resource management.
 
         Args:
@@ -248,37 +239,25 @@ class StandardTaskManager(TaskManager[T, R], Generic[T, R]):
         self._logger.debug("Executing concurrent tasks", count=len(tasks), **context)
 
         # Create a specialized run_task for Dict[str, Any] return type
-        async def run_task_dict(
-            coro: Coroutine[Any, Any, Dict[str, Any]]
-        ) -> Dict[str, Any]:
+        async def run_task_dict(coro: Coroutine[Any, Any, dict[str, Any]]) -> dict[str, Any]:
             return await self.run_task(coro)  # type: ignore
 
-        async def run_with_semaphore(
-            coro: Coroutine[Any, Any, Dict[str, Any]]
-        ) -> Dict[str, Any]:
+        async def run_with_semaphore(coro: Coroutine[Any, Any, dict[str, Any]]) -> dict[str, Any]:
             async with self._semaphore:
                 return await run_task_dict(coro)
 
         try:
             if timeout:
                 async with asyncio.timeout(timeout):
-                    results = await asyncio.gather(
-                        *[run_with_semaphore(task) for task in tasks]
-                    )
+                    results = await asyncio.gather(*[run_with_semaphore(task) for task in tasks])
             else:
-                results = await asyncio.gather(
-                    *[run_with_semaphore(task) for task in tasks]
-                )
+                results = await asyncio.gather(*[run_with_semaphore(task) for task in tasks])
             return [r for r in results if r is not None]
-        except asyncio.TimeoutError:
-            self._logger.error(
-                "Concurrent tasks execution timed out", timeout=timeout, **context
-            )
+        except TimeoutError:
+            self._logger.error("Concurrent tasks execution timed out", timeout=timeout, **context)
             raise
         except Exception as e:
-            self._logger.error(
-                "Failed to execute concurrent tasks", exception=str(e), **context
-            )
+            self._logger.error("Failed to execute concurrent tasks", exception=str(e), **context)
             raise
 
     def cancel_all_tasks(self) -> None:
@@ -303,7 +282,7 @@ class StandardTaskManager(TaskManager[T, R], Generic[T, R]):
         return len(self._tasks)
 
     def create_and_track_task(
-        self, coro: Coroutine[Any, Any, R], task_name: Optional[str] = None
+        self, coro: Coroutine[Any, Any, R], task_name: str | None = None
     ) -> asyncio.Task[R]:
         """Create and track an asyncio task for proper cleanup.
 
@@ -329,9 +308,7 @@ class StandardTaskManager(TaskManager[T, R], Generic[T, R]):
         if self._shutting_down:
             raise RuntimeError("TaskManager is shutting down")
 
-        task: asyncio.Task[R] = asyncio.create_task(
-            coro, name=task_name or f"task_{id(coro)}"
-        )
+        task: asyncio.Task[R] = asyncio.create_task(coro, name=task_name or f"task_{id(coro)}")
         self._tasks.add(task)
 
         # Add callback to remove task from tracking set when done

@@ -8,11 +8,12 @@ This example shows how to:
 3. Implement retry pattern for automatic retries with configurable policies
 4. Apply timeout pattern to prevent operations from hanging indefinitely
 """
+
 import asyncio
 import secrets
 import signal
 import time
-from typing import Any, Dict
+from typing import Any
 
 import structlog
 from resilience_h8.concurrency.async_task_manager import AsyncTaskManager
@@ -43,7 +44,7 @@ class ExternalService:
         self.circuit_open = False
         logger.info("Circuit breaker reset")
 
-    async def call_api(self, request_id: str) -> Dict[str, Any]:
+    async def call_api(self, request_id: str) -> dict[str, Any]:
         """Simulate an API call with potential failures and varying latency"""
         if self.circuit_open:
             logger.error("Circuit is open, fast failing", request_id=request_id)
@@ -94,16 +95,12 @@ class ResilientClient:
         )
 
         # Create resilience service that uses the task manager
-        self.resilience = ResilienceService(
-            task_manager=self.task_manager, logger=logger
-        )
+        self.resilience = ResilienceService(task_manager=self.task_manager, logger=logger)
 
         self.service = ExternalService()
 
         # Initialize decorators
-        self.timeout_decorator = self.resilience.with_timeout(
-            timeout=2.0
-        )  # Increased timeout
+        self.timeout_decorator = self.resilience.with_timeout(timeout=2.0)  # Increased timeout
         self.retry_decorator = self.resilience.with_retry(max_retries=2)
         self.circuit_breaker_decorator = self.resilience.with_circuit_breaker(
             failure_threshold=5,  # Increased failure threshold
@@ -118,57 +115,53 @@ class ResilientClient:
         )
 
     @property
-    def metrics(self) -> Dict[str, Any]:
+    def metrics(self) -> dict[str, Any]:
         """Get performance metrics from task manager"""
         return self.task_manager.get_performance_metrics()
 
     async def close(self):
         """Shutdown client gracefully"""
-        await self.task_manager._shutdown(
-            sig=signal.SIGINT
-        )  # Using internal _shutdown method
+        await self.task_manager._shutdown(sig=signal.SIGINT)  # Using internal _shutdown method
 
     # Basic API call with no resilience patterns
-    async def basic_api_call(self, request_id: str) -> Dict[str, Any]:
+    async def basic_api_call(self, request_id: str) -> dict[str, Any]:
         """Call API with no resilience patterns"""
         return await self.service.call_api(request_id)
 
     # Apply timeout pattern
-    async def api_with_timeout(self, request_id: str) -> Dict[str, Any]:
+    async def api_with_timeout(self, request_id: str) -> dict[str, Any]:
         """Call API with timeout pattern"""
         return await self.timeout_decorator(self.service.call_api)(request_id)
 
     # Apply retry pattern
-    async def api_with_retry(self, request_id: str) -> Dict[str, Any]:
+    async def api_with_retry(self, request_id: str) -> dict[str, Any]:
         """Call API with retry pattern"""
         return await self.retry_decorator(self.service.call_api)(request_id)
 
     # Apply circuit breaker pattern
-    async def api_with_circuit_breaker(self, request_id: str) -> Dict[str, Any]:
+    async def api_with_circuit_breaker(self, request_id: str) -> dict[str, Any]:
         """Call API with circuit breaker pattern"""
         return await self.circuit_breaker_decorator(self.service.call_api)(request_id)
 
     # Apply bulkhead pattern
-    async def api_with_bulkhead(self, request_id: str) -> Dict[str, Any]:
+    async def api_with_bulkhead(self, request_id: str) -> dict[str, Any]:
         """Call API with bulkhead pattern"""
         return await self.bulkhead_decorator(self.service.call_api)(request_id)
 
     # Combine multiple resilience patterns
-    async def api_with_all_patterns(self, request_id: str) -> Dict[str, Any]:
+    async def api_with_all_patterns(self, request_id: str) -> dict[str, Any]:
         """Call API with all resilience patterns combined"""
         # Compose decorators
         decorated_call = self.timeout_decorator(  # Timeout first
             self.retry_decorator(  # Then retry
                 self.circuit_breaker_decorator(  # Then circuit breaker
-                    self.bulkhead_decorator(  # Finally bulkhead
-                        self.service.call_api
-                    )
+                    self.bulkhead_decorator(self.service.call_api)  # Finally bulkhead
                 )
             )
         )
         return await decorated_call(request_id)
 
-    async def api_with_rate_limit(self, request_id: str) -> Dict[str, Any]:
+    async def api_with_rate_limit(self, request_id: str) -> dict[str, Any]:
         """Call API with rate limit pattern"""
         return await self.resilience.with_rate_limiter(
             requests_per_period=1,
@@ -190,18 +183,12 @@ async def demonstrate_basic_api_call(client: ResilientClient):
             result = await client.basic_api_call(request_id)
             elapsed = time.time() - start_time
             print(f"Request {request_id} succeeded after {elapsed:.2f}s: {result}")
-            results.append(
-                {"status": "success", "request_id": request_id, "result": result}
-            )
+            results.append({"status": "success", "request_id": request_id, "result": result})
         except Exception as e:
             print(f"Request {request_id} failed: {e}")
-            results.append(
-                {"status": "failure", "request_id": request_id, "error": str(e)}
-            )
+            results.append({"status": "failure", "request_id": request_id, "error": str(e)})
 
-    print(
-        f"Success rate: {sum(1 for r in results if r['status'] == 'success')} / {len(results)}"
-    )
+    print(f"Success rate: {sum(1 for r in results if r['status'] == 'success')} / {len(results)}")
     print(f"Performance metrics: {client.metrics}")
 
 
@@ -217,20 +204,14 @@ async def demonstrate_timeout_pattern(client: ResilientClient):
             result = await client.api_with_timeout(request_id)
             elapsed = time.time() - start_time
             print(f"Request {request_id} succeeded after {elapsed:.2f}s: {result}")
-            results.append(
-                {"status": "success", "request_id": request_id, "time": elapsed}
-            )
-        except asyncio.TimeoutError:
+            results.append({"status": "success", "request_id": request_id, "time": elapsed})
+        except TimeoutError:
             elapsed = time.time() - start_time
             print(f"Request {request_id} timed out after {elapsed:.2f}s (as expected)")
-            results.append(
-                {"status": "timeout", "request_id": request_id, "time": elapsed}
-            )
+            results.append({"status": "timeout", "request_id": request_id, "time": elapsed})
         except Exception as e:
             print(f"Request {request_id} failed with unexpected error: {e}")
-            results.append(
-                {"status": "failure", "request_id": request_id, "error": str(e)}
-            )
+            results.append({"status": "failure", "request_id": request_id, "error": str(e)})
 
     # Print summary
     timeouts = sum(1 for r in results if r["status"] == "timeout")
@@ -251,15 +232,11 @@ async def demonstrate_retry_pattern(client: ResilientClient):
             result = await client.api_with_retry(request_id)
             elapsed = time.time() - start_time
             print(f"Request {request_id} succeeded after {elapsed:.2f}s: {result}")
-            results.append(
-                {"status": "success", "request_id": request_id, "time": elapsed}
-            )
+            results.append({"status": "success", "request_id": request_id, "time": elapsed})
         except Exception as e:
             elapsed = time.time() - start_time
             print(f"Request {request_id} failed after retries in {elapsed:.2f}s: {e}")
-            results.append(
-                {"status": "failure", "request_id": request_id, "error": str(e)}
-            )
+            results.append({"status": "failure", "request_id": request_id, "error": str(e)})
 
     # Print summary
     successes = sum(1 for r in results if r["status"] == "success")
@@ -349,19 +326,15 @@ async def demonstrate_combined_patterns(client: ResilientClient):
             result = await client.api_with_all_patterns(request_id)
             elapsed = time.time() - start_time
             print(f"Request {request_id} succeeded after {elapsed:.2f}s: {result}")
-            results.append(
-                {"status": "success", "request_id": request_id, "time": elapsed}
-            )
-        except asyncio.TimeoutError:
+            results.append({"status": "success", "request_id": request_id, "time": elapsed})
+        except TimeoutError:
             elapsed = time.time() - start_time
             print(f"Request {request_id} timed out after {elapsed:.2f}s")
             results.append({"status": "timeout", "request_id": request_id})
         except Exception as e:
             elapsed = time.time() - start_time
             print(f"Request {request_id} failed after {elapsed:.2f}s: {e}")
-            results.append(
-                {"status": "failure", "request_id": request_id, "error": str(e)}
-            )
+            results.append({"status": "failure", "request_id": request_id, "error": str(e)})
 
     # Print summary
     successes = sum(1 for r in results if r["status"] == "success")
@@ -385,15 +358,11 @@ async def demonstrate_ratelimiter_pattern(client: ResilientClient):
             result = await client.api_with_rate_limit(request_id)
             elapsed = time.time() - start_time
             print(f"Request {request_id} succeeded after {elapsed:.2f}s: {result}")
-            results.append(
-                {"status": "success", "request_id": request_id, "time": elapsed}
-            )
+            results.append({"status": "success", "request_id": request_id, "time": elapsed})
         except Exception as e:
             elapsed = time.time() - start_time
             print(f"Request {request_id} failed after {elapsed:.2f}s: {e}")
-            results.append(
-                {"status": "failure", "request_id": request_id, "error": str(e)}
-            )
+            results.append({"status": "failure", "request_id": request_id, "error": str(e)})
 
 
 async def main():

@@ -7,8 +7,15 @@ with the concurrency framework for handling transient failures.
 import asyncio
 import secrets
 import time
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Dict, Generic, List, Optional, Protocol, Type, TypeVar, Union, cast
+from typing import (
+    Any,
+    Generic,
+    Protocol,
+    TypeVar,
+    cast,
+)
 
 import structlog
 from structlog import get_logger
@@ -22,7 +29,7 @@ R = TypeVar("R")
 P = TypeVar("P", bound=Callable[..., Any])
 
 # Define ExceptionType as a Union type that can accept either Exception instances or Exception classes
-ExceptionType = Union[Type[Exception], Exception]
+ExceptionType = type[Exception] | Exception
 
 
 class Retryable(Protocol):
@@ -41,8 +48,8 @@ class StandardRetryHandler(RetryHandler[T, R], Generic[T, R]):
 
     def __init__(
         self,
-        logger: Optional[structlog.typing.FilteringBoundLogger] = None,
-        task_manager: Optional[TaskManager[Any, Any]] = None,
+        logger: structlog.typing.FilteringBoundLogger | None = None,
+        task_manager: TaskManager[Any, Any] | None = None,
     ):
         """Initialize the StandardRetryHandler.
 
@@ -59,8 +66,8 @@ class StandardRetryHandler(RetryHandler[T, R], Generic[T, R]):
         max_retries: int = 3,
         backoff_factor: float = 1.0,
         jitter: bool = True,
-        retry_on_exceptions: Optional[List[Exception]] = None,
-        context: Optional[Dict[str, Any]] = None,
+        retry_on_exceptions: list[Exception] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> R:
         """Execute an operation with retry logic.
 
@@ -106,7 +113,9 @@ class StandardRetryHandler(RetryHandler[T, R], Generic[T, R]):
                 # Check if the caught exception is of a type we should retry on
                 should_retry = False
                 for exc_type in exception_types:
-                    if isinstance(e, type(exc_type) if not isinstance(exc_type, type) else exc_type):
+                    if isinstance(
+                        e, type(exc_type) if not isinstance(exc_type, type) else exc_type
+                    ):
                         should_retry = True
                         break
 
@@ -150,7 +159,7 @@ class StandardRetryHandler(RetryHandler[T, R], Generic[T, R]):
         max_retries: int = 3,
         backoff_factor: float = 1.0,
         jitter: bool = True,
-        retry_on_exceptions: Optional[List[Exception]] = None,
+        retry_on_exceptions: list[Exception] | None = None,
     ) -> Callable[[P], P]:
         """Create a decorator for adding retry logic to a function.
 

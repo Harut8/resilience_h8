@@ -5,7 +5,7 @@ circuit breakers, and bulkheads used in the application.
 """
 
 from enum import StrEnum
-from typing import Any, Dict, Optional, TypedDict
+from typing import Any, TypedDict
 
 
 class CircuitState(StrEnum):
@@ -21,12 +21,12 @@ class RetryableContext(TypedDict, total=False):
 
     max_retries: int
     retry_count: int
-    last_exception: Optional[Exception]
+    last_exception: Exception | None
     backoff_factor: float
     jitter: float
     operation_name: str
     start_time: float
-    metadata: Optional[Dict[str, Any]]
+    metadata: dict[str, Any] | None
 
 
 class RateLimiterException(Exception):
@@ -38,7 +38,7 @@ class RateLimiterException(Exception):
 class RateLimitExceeded(RateLimiterException):
     """Exception raised when rate limit is exceeded."""
 
-    def __init__(self, message: str, retry_after: Optional[float] = None):
+    def __init__(self, message: str, retry_after: float | None = None):
         """Initialize the exception.
 
         Args:
@@ -57,4 +57,4 @@ class RateLimitContext(TypedDict, total=False):
     period_seconds: float
     current_window_start: float
     current_request_count: int
-    metadata: Optional[Dict[str, Any]]
+    metadata: dict[str, Any] | None
