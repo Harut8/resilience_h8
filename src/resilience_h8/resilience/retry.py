@@ -35,8 +35,7 @@ ExceptionType = type[Exception] | Exception
 class Retryable(Protocol):
     """Protocol for objects that can be called."""
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        ...
+    def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
 class StandardRetryHandler(RetryHandler[T, R], Generic[T, R]):

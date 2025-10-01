@@ -111,8 +111,7 @@ class RedisTokenBucketRateLimiter(RateLimiter[T], Generic[T]):
         wait: bool = True,
         timeout: float | None = None,
         context: dict[str, Any] | None = None,
-    ) -> T:
-        ...
+    ) -> T: ...
 
     @overload
     async def execute(
@@ -121,8 +120,7 @@ class RedisTokenBucketRateLimiter(RateLimiter[T], Generic[T]):
         wait: bool = True,
         timeout: float | None = None,
         context: dict[str, Any] | None = None,
-    ) -> T:
-        ...
+    ) -> T: ...
 
     async def execute(
         self,
@@ -283,8 +281,7 @@ class RedisFixedWindowRateLimiter(RateLimiter[T], Generic[T]):
         wait: bool = True,
         timeout: float | None = None,
         context: dict[str, Any] | None = None,
-    ) -> T:
-        ...
+    ) -> T: ...
 
     @overload
     async def execute(
@@ -293,8 +290,7 @@ class RedisFixedWindowRateLimiter(RateLimiter[T], Generic[T]):
         wait: bool = True,
         timeout: float | None = None,
         context: dict[str, Any] | None = None,
-    ) -> T:
-        ...
+    ) -> T: ...
 
     async def execute(
         self,

@@ -506,8 +506,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
         coro: Coroutine[Any, Any, R],
         timeout: float | None = None,
         context_vars: ContextDict | None = None,
-    ) -> R:
-        ...
+    ) -> R: ...
 
     @overload
     async def run_with_semaphore(
@@ -515,8 +514,7 @@ class AsyncTaskManager(TaskManager[Any, Any], Generic[T]):
         coro: Awaitable[R],
         timeout: float | None = None,
         context_vars: ContextDict | None = None,
-    ) -> R:
-        ...
+    ) -> R: ...
 
     async def run_with_semaphore(
         self,

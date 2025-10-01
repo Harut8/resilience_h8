@@ -133,8 +133,7 @@ class TokenBucketRateLimiter(RateLimiter[T], Generic[T]):
         wait: bool = True,
         timeout: float | None = None,
         context: dict[str, Any] | None = None,
-    ) -> T:
-        ...
+    ) -> T: ...
 
     @overload
     async def execute(
@@ -143,8 +142,7 @@ class TokenBucketRateLimiter(RateLimiter[T], Generic[T]):
         wait: bool = True,
         timeout: float | None = None,
         context: dict[str, Any] | None = None,
-    ) -> T:
-        ...
+    ) -> T: ...
 
     async def execute(
         self,
@@ -302,8 +300,7 @@ class FixedWindowRateLimiter(RateLimiter[T], Generic[T]):
         wait: bool = True,
         timeout: float | None = None,
         context: dict[str, Any] | None = None,
-    ) -> T:
-        ...
+    ) -> T: ...
 
     @overload
     async def execute(
@@ -312,8 +309,7 @@ class FixedWindowRateLimiter(RateLimiter[T], Generic[T]):
         wait: bool = True,
         timeout: float | None = None,
         context: dict[str, Any] | None = None,
-    ) -> T:
-        ...
+    ) -> T: ...
 
     async def execute(
         self,
