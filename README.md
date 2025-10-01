@@ -1,5 +1,12 @@
 # Resilience_H8
 
+[![CI](https://github.com/Harut8/resilience_h8/workflows/CI/badge.svg)](https://github.com/Harut8/resilience_h8/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/Harut8/resilience_h8/branch/main/graph/badge.svg)](https://codecov.io/gh/Harut8/resilience_h8)
+[![PyPI version](https://badge.fury.io/py/resilience-h8.svg)](https://badge.fury.io/py/resilience-h8)
+[![Python versions](https://img.shields.io/pypi/pyversions/resilience-h8.svg)](https://pypi.org/project/resilience-h8/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+
 A robust Python library for implementing resilience patterns in microservices architectures with concurrency control.
 
 ## Features

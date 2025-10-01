@@ -24,7 +24,6 @@ logs
 .mypy_cache
 .pytest_cache
 .hypothesis
-.github
 .charts
 venv
 .venv
