@@ -19,8 +19,18 @@ def pytest_addoption(parser):
 
 @pytest.fixture(scope="session")
 def redis_available(request):
-    """Check if --redis flag is provided."""
-    return request.config.getoption("--redis")
+    """Check if --redis flag is provided or if Redis is available in CI."""
+    # Check command line flag first
+    if request.config.getoption("--redis"):
+        return True
+
+    # Auto-detect in CI environment (GitHub Actions provides Redis service)
+    import os
+
+    if os.getenv("CI") or os.getenv("GITHUB_ACTIONS"):
+        return True
+
+    return False
 
 
 # Configure structlog for testing
